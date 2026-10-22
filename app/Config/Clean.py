@@ -12,11 +12,12 @@ def main():
     session = Session.builder.configs(connection_parameters).create()
 
     try:
-        session.sql("CREATE DATABASE IF NOT EXISTS ORDERS_SALES").collect()
-        print("Database ORDERS_SALES verified/created successfully.")
-
+        # session.sql("CREATE DATABASE IF EXISTS ORDERS_SALES").collect()
+        # print("Database ORDERS_SALES verified/created successfully.")
         session.sql("DROP SCHEMA IF EXISTS ORDERS_SALES.BRONZE").collect()
         print("Schema BRONZE dropped successfully.")
+
+        
 
     finally:
         session.close()
