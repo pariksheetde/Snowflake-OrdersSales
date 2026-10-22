@@ -6,7 +6,7 @@ from snowflake.snowpark.functions import *
 import snowflake.connector
 from snowflake.snowpark import Session
 import os
-from configs import connection_parameters
+from config import connection_parameters
 
 def main():
     session = Session.builder.configs(connection_parameters).create()

@@ -3,7 +3,7 @@ app/__pycache__/
 *.pyc
 
 # Credentials
-app/Config/configs.py
+app/Config/config.py
 
 # Virtual environment
 .venv/
