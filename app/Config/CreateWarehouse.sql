@@ -17,7 +17,7 @@ import os
 from config import connection_parameters
 from snowflake.snowpark import Session
 
-def main():
+def create_warehouse():
     session = Session.builder.configs(connection_parameters).create()
 
     try:
@@ -42,4 +42,4 @@ def main():
         session.close()
 
 if __name__ == "__main__":
-    main()
+    create_warehouse()
