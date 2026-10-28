@@ -8,7 +8,7 @@ from snowflake.snowpark import Session
 import os
 from config import connection_parameters
 
-def main():
+def cleanup():
     session = Session.builder.configs(connection_parameters).create()
 
     try:
@@ -23,4 +23,4 @@ def main():
         session.close()
 
 if __name__ == "__main__":
-    main()
+    cleanup()
