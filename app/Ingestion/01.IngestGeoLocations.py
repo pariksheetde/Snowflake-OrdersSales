@@ -5,3 +5,5 @@ from snowflake.snowpark import Session
 import os
 from config import connection_parameters
 
+# Create a Snowflake session
+session = Session.builder.configs(connection_parameters).create()
