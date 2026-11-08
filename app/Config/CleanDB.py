@@ -17,7 +17,6 @@ def cleanup():
         session.sql("DROP DATABASE IF EXISTS ORDERS_SALES").collect()
         print("Database ORDERS_SALES dropped successfully.")
 
-        
 
     finally:
         session.close()
