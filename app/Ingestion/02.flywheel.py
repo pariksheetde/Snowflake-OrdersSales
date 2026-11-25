@@ -5,7 +5,7 @@ import sys
 from pathlib import PurePosixPath
 from email.utils import formatdate
 from datetime import datetime, timezone
-from Collections import Counter
+from collections import Counter
 
 import boto3
 import yaml
@@ -206,6 +206,7 @@ def main(config):
     LOG.info("AWS identity: %s", session.client("sts").get_caller_identity()["Arn"])
 
     s3 = session.client("s3")
+    ses = session.client("ses")
 
     validate_buckets(s3, config)
     ensure_top_level_folders(s3, config)
@@ -215,6 +216,7 @@ def main(config):
     failed = 0
 
     failures = []
+    copied_files = []
 
     for source_name, mapping in config["sources"].items():
         source_prefix = normalize_prefix(mapping["source_prefix"])
@@ -231,7 +233,7 @@ def main(config):
 
             try:
                 # SCENARIO 3: process_study returns "SKIPPED" when everything was already copied
-                result = process_study(s3, config, source_name, mapping, study, objects)
+                result = process_study(s3, config, source_name, mapping, study, objects, copied_files)
                 if result == "SKIPPED":
                     skipped += 1
                 else:
@@ -239,14 +241,114 @@ def main(config):
             except Exception as error:
                 failed += 1
 
-                failures.append("{}/{}: {}".format(source_name, study, error)
+                failures.append("Source ={} | Study ={} | Error ={}".format(source_name, study, error)
                 )
 
                 LOG.exception("Study failed: %s", study)
 
     LOG.info("Run Summary : processed=%d, skipped=%d, failed=%d", processed, skipped, failed)
 
+    # 
+    # Send Email Notification
+    # 
+    if copied_files and not failures:
+        email_body = []
+        email_body.append(
+            "Flywheel Ingestion Completed Successfully"
+        )
+        email_body.append("")
+        email_body.append("Execution Timestamp: {}".format(formatdate(localtime=True)))
+        email_body.append("Files Copied: {}".format(len(copied_files)))
+        email_body.append("")
+        email_body.append("Loaded Files: ")
+        email_body.append(
+            "---------------------------------------------------------")
+        study_counts = Counter(item["study"] for item in copied_files)
+
+        for item in copied_files:
+            email_body.append("""
+            Study : {}
+            File Count : {}
+            Source : {}
+            Target : {}
+            Size : {} bytes
+            Source Arrival : {}
+            Target Load Time : {}
+            ------------------------------------------------------------------------------------------------------------------
+
+            
+            """.format(
+                item["study"],
+                study_counts[item["study"]],
+                item["source"],
+                item["target"],
+                item["size"],
+                item["arrival_time"].strftime("%Y-%m-%d %H:%M:%S UTC"),
+                item["load_time"].strftime("%Y-%m-%d %H:%M:%S UTC")
+            )
+            )
+            try:
+                send_email(
+                    ses=ses,
+                    sender=config["email_sender"],
+                    recipients=config["email_recipients"],
+                    subject="Flywheel Ingestion Notification",
+                    body="\n".join(email_body)
+                )
+            except Exception as error:
+                LOG.exception(
+                    "Failed to send notification email: %s", error
+                )
+
+
     if failures:
+        failure_body = []
+        failure_body.append(
+            "Flywheel Ingestion Failed"
+        )
+
+        failure_body.append("")
+
+        failure_body.append(
+        "Execution Timestamp : {}".format(formatdate(localtime=True)))
+
+        failure_body.append("")
+
+        failure_body.append(
+            "Processed Studies : {}".format(processed)
+        )
+
+        failure_body.append(
+            "Skipped Studies : {}".format(skipped)
+        )
+
+        failure_body.append(
+            "Failed Studies : {}".format(failed)
+        )
+
+        failure_body.append("")
+        failure_body.append("Failure Details: ")
+
+        failure_body.append("-----------------------------------------------------------")
+        for failure in failures:
+            failure_body.append(failure)
+        
+        try:
+            send_email(
+                ses=ses,
+                sender=config["email_sender"],
+                recipients=config["email_recipients"],
+                subject="[FAILED] Flywheel Ingestion Notification",
+                body="\n".join(email_body)
+            )
+            LOG.info(
+                "failure Notification email sent"
+            )
+        except Exception as error:
+            LOG.info(
+                "Failed to send failure notification email: %s", error
+            )
+
         raise RuntimeError(
                 "One or more studies failed: " + " | ".join(failures)
                 )
