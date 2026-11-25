@@ -3,6 +3,9 @@ import re
 import os
 import sys
 from pathlib import PurePosixPath
+from email.utils import formatdate
+from datetime import datetime, timezone
+from Collections import Counter
 
 import boto3
 import yaml
@@ -133,7 +136,7 @@ def copy_source_object(s3,config,source_key,destination_key):
         Config = TRANSFER,
     )
 
-def process_study(s3, config, source_name, mapping, study, objects):
+def process_study(s3, config, source_name, mapping, study, objects, copied_files):
     copied = 0
     source_prefix = normalize_prefix(mapping["source_prefix"])
 
@@ -162,10 +165,38 @@ def process_study(s3, config, source_name, mapping, study, objects):
 
         LOG.info("Copying %s -> %s", source_key, destination_key)
         copy_source_object(s3, config, source_key, destination_key)
+        copied_files.append({
+            "study" : study,
+            "source" : source_key,
+            "target" : destination_key,
+            "size" : source_object["Size"],
+            "arrival_time" : source_object["LastModified"],
+            "load_time" : datetime.now(timezone.utc)
+        })
         copied += 1
 
     LOG.info("Study completed %s, files copied= %d, already present= %d", study, copied, skipped)
     return "SKIPPED" if copied == 0 else "PROCESSED"
+
+def send_email(ses, sender, recipients, subject, body):
+    ses.send_email(
+        Source = sender,
+        Destination = {
+            "ToAddresses" : recipients
+        },
+        Message = {
+            "Subject" : {
+                "Data" : subject
+            },
+            "Body" : {
+                "Text" : {
+                    "Data" : body
+                }
+            }
+        }
+    )
+
+    LOG.info("Notification email sent to %s", ",".join(recipients))
 
 def main(config):
     session = boto3.Session(
